@@ -44,7 +44,7 @@ export default function Bookmarks() {
     loadCurrentTab();
   }, []);
 
-  async function loadCurrentTab() {
+  function loadCurrentTab() {
     try {
       // Check if chrome API is available (won't be in localhost dev)
       if (typeof chrome === "undefined" || !chrome.tabs) {
@@ -53,45 +53,48 @@ export default function Bookmarks() {
         return;
       }
 
-      const [tab] = await chrome.tabs.query({
-        active: true,
-        currentWindow: true,
-      });
-
-      if (!tab?.url) {
-        setLoading(false);
-        return;
-      }
-
-      const url = new URL(tab.url);
-      if (url.hostname.includes("youtube.com") && url.pathname === "/watch") {
-        const vid = url.searchParams.get("v");
-        if (vid) {
-          setIsYoutube(true);
-          setVideoId(vid);
-          setVideoTitle(
-            tab.title?.replace(" - YouTube", "") || "YouTube Video"
-          );
-          await loadBookmarks(vid);
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (chrome.runtime.lastError || !tabs || tabs.length === 0 || !tabs[0].url) {
+          setLoading(false);
+          setIsYoutube(false);
+          return;
         }
-      }
+
+        const tab = tabs[0];
+        try {
+          const url = new URL(tab.url);
+          if (url.hostname.includes("youtube.com") && url.pathname === "/watch") {
+            const vid = url.searchParams.get("v");
+            if (vid) {
+              setIsYoutube(true);
+              setVideoId(vid);
+              setVideoTitle(tab.title?.replace(" - YouTube", "") || "YouTube Video");
+              
+              // Load bookmarks using callback pattern
+              chrome.storage.local.get(STORAGE_KEY, (data) => {
+                if (!chrome.runtime.lastError) {
+                  const allBookmarks = data[STORAGE_KEY] || {};
+                  const videoData = allBookmarks[vid];
+                  if (videoData?.bookmarks) {
+                    setBookmarks(videoData.bookmarks);
+                    if (videoData.title) setVideoTitle(videoData.title);
+                  }
+                }
+                setLoading(false); // ALWAYS update loading state after completion
+              });
+              return; // return so we don't hit the bottom setLoading(false) instantly
+            }
+          }
+        } catch (e) {
+          console.error("Failed to parse URL:", e);
+        }
+        
+        // If not youtube, or no vid found
+        setLoading(false);
+      });
     } catch (e) {
       console.error("Failed to load tab info:", e);
-    }
-    setLoading(false);
-  }
-
-  async function loadBookmarks(vid) {
-    try {
-      const data = await chrome.storage.local.get(STORAGE_KEY);
-      const allBookmarks = data[STORAGE_KEY] || {};
-      const videoData = allBookmarks[vid];
-      if (videoData?.bookmarks) {
-        setBookmarks(videoData.bookmarks);
-        if (videoData.title) setVideoTitle(videoData.title);
-      }
-    } catch (e) {
-      console.error("Failed to load bookmarks:", e);
+      setLoading(false);
     }
   }
 

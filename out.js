@@ -2,15 +2,12 @@ const fs = require('fs');
 const glob = require('glob');
 const path = require('path');
 
-const files = glob.sync('out/**/*.html');
-files.forEach((file) => {
+// 1. Process HTML files for CSP inline script extraction
+const htmlFiles = glob.sync('out/**/*.html');
+htmlFiles.forEach((file) => {
   let content = fs.readFileSync(file, 'utf-8');
   
-  // 1. Fix _next paths to be relative for Chrome extensions
-  content = content.replace(/\/_next/g, './next');
-
-  // 2. Fix inline scripts CSP violations (Chrome Extension Manifest V3 strictly blocks inline Javascript)
-  // We extract any inline <script> tag into an external file and reference it
+  // Extract inline <script> tag into an external file and reference it (CSP fix)
   const scriptRegex = /<script(?![^>]*src=)([^>]*)>(.*?)<\/script>/gs;
   let scriptCounter = 0;
 
@@ -23,21 +20,18 @@ files.forEach((file) => {
     if (body.trim()) {
       const filename = `${path.basename(file, '.html')}-inline-${scriptCounter++}.js`;
       const filePath = path.join(path.dirname(file), filename);
-      
       // Save the inline Javascript into a real file
       fs.writeFileSync(filePath, body, 'utf-8');
-      
       // Return a standard link to the extracted file instead of inline script
       return `<script${attrs} src="./${filename}"></script>`;
     }
-    
     return match;
   });
 
   fs.writeFileSync(file, content, 'utf-8');
 });
 
-// Rename the _next directory to avoid Chrome Extension reserved underscore issues
+// 2. Rename _next directory to next (avoids Chrome reserved '_' prefix issues)
 const sourcePath = 'out/_next';
 const destinationPath = 'out/next';
 
@@ -47,3 +41,16 @@ if (fs.existsSync(sourcePath)) {
 } else if (fs.existsSync(destinationPath)) {
   console.log('Directory "next" already exists.');
 }
+
+// 3. Fix absolute '/_next/' paths internally within all exported CSS and JS files
+// Next.js chunks natively try to fetch additional scripts from /_next/, which 404s in an extension
+const allFiles = glob.sync('out/**/*.{html,js,css,json}');
+allFiles.forEach((file) => {
+  const content = fs.readFileSync(file, 'utf-8');
+  if (content.includes('/_next/')) {
+    const modifiedContent = content.replace(/\/_next\//g, './next/');
+    fs.writeFileSync(file, modifiedContent, 'utf-8');
+  }
+});
+
+console.log('Processed Chrome Extension Static Export Fixes.');
