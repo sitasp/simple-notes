@@ -21,7 +21,17 @@ Simple Notes provides a clean, simple interface for taking notes directly within
 
 To install and run Simple Notes locally, follow these steps:
 
-1. Install the dependencies using npm: 
+1. Clone this repository: 
+
+   ```bash
+   git clone https://github.com/sitasp/simple-notes.git
+   ```
+2. Navigate to project directory: 
+
+   ```
+   cd simple-notes
+   ```
+3. Install the dependencies using npm: 
    ```
    npm install
    ```

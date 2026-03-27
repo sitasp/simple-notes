@@ -1,6 +1,7 @@
 .container {
   width: 400px;
-  height: 485px;
+  min-height: 300px;
+  max-height: 500px;
   background: linear-gradient(153deg, rgb(116, 56, 216), rgb(18, 150, 170) 74%);
   padding: 5px;
   color: white;
@@ -8,15 +9,18 @@
 
 .main {
   width: 390px;
-  height: 475px;
+  min-height: 290px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
+  padding-top: 8px;
 }
 
 .title {
-  font-size: x-large;
+  font-size: 18px;
+  margin: 4px 0 4px 0;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
 .description {

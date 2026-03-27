@@ -2,15 +2,32 @@
   "manifest_version": 3,
   "name": "Simple Notes",
   "short_name": "Simple Notes",
-  "version": "0.0.1",
-  "description": "Simple Notes - A Chrome Extension built with Next.js",
+  "version": "0.0.2",
+  "description": "Simple Notes - YouTube Timestamp Bookmarks Chrome Extension",
   "icons": {
     "16": "/icons/icon16.png",
     "32": "/icons/icon32.png",
     "48": "/icons/icon48.png",
     "192": "/icons/icon192.png"
   },
-  "permissions": [],
+  "permissions": ["storage", "activeTab", "tabs"],
+  "commands": {
+    "save-timestamp": {
+      "suggested_key": { "default": "Alt+S", "mac": "MacCtrl+S" },
+      "description": "Save current video timestamp"
+    },
+    "next-timestamp": {
+      "suggested_key": { "default": "Alt+N", "mac": "MacCtrl+N" },
+      "description": "Jump to next bookmark"
+    },
+    "prev-timestamp": {
+      "suggested_key": { "default": "Alt+P", "mac": "MacCtrl+P" },
+      "description": "Jump to previous bookmark"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
   "web_accessible_resources": [
     {
       "resources": ["index.html"],
@@ -19,11 +36,12 @@
   ],
   "content_scripts": [
     {
-      "matches": ["https://*/*", "http://*/*"],
-      "js": ["inject.js"]
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["youtube-bookmarks.js"],
+      "run_at": "document_idle"
     }
   ],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": ["*://*.youtube.com/*"],
   "action": {
     "default_popup": "index.html"
   }

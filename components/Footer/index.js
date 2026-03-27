@@ -3,7 +3,11 @@ import styles from './Footer.module.css';
 export default function Footer() {
   return (
     <footer className={styles.footer}>
-      <span>
+      <a
+        href="https://github.com/sitasp/simple-notes"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
         Simple Notes V.0.0.1
         <span className={styles.logo}>
           <img
@@ -13,7 +17,7 @@ export default function Footer() {
             height={16}
           />
         </span>
-      </span>
+      </a>
     </footer>
   );
 }
