@@ -109,6 +109,14 @@
             0 20px 60px rgba(0, 0, 0, 0.5),
             0 0 0 1px rgba(255, 255, 255, 0.05) inset;
           overflow: hidden;
+          transition: box-shadow 0.3s ease;
+        }
+
+        #sn-note-overlay .sn-window.sn-glow-active {
+          box-shadow:
+            0 20px 60px rgba(0, 0, 0, 0.5),
+            inset 0 0 24px rgba(116, 56, 216, 0.4),
+            0 0 0 1px rgba(255, 255, 255, 0.05) inset;
         }
 
         /* ── Title bar ── */
@@ -179,13 +187,13 @@
         /* ── Body ── */
         #sn-note-overlay .sn-body {
           padding: 14px;
-          min-height: 120px;
+          min-height: 200px;
           max-height: 280px;
         }
 
         #sn-note-overlay .sn-textarea {
           width: 100%;
-          min-height: 120px;
+          min-height: 200px;
           max-height: 260px;
           background: rgba(0, 0, 0, 0.25);
           border: 1px solid rgba(255, 255, 255, 0.1);
@@ -212,7 +220,7 @@
           font-size: 13px;
           line-height: 1.7;
           padding: 4px 0;
-          min-height: 120px;
+          min-height: 200px;
           max-height: 260px;
           overflow-y: auto;
           scrollbar-width: thin;
@@ -403,6 +411,7 @@
       tabEdit.classList.add("sn-active");
       tabPreview.classList.remove("sn-active");
       footer.style.display = "";
+      overlay.querySelector(".sn-window").classList.remove("sn-glow-active");
       textarea.focus();
     }
 
@@ -424,6 +433,13 @@
       preview.style.display = "";
       tabPreview.classList.add("sn-active");
       tabEdit.classList.remove("sn-active");
+
+      const windowEl = overlay.querySelector(".sn-window");
+      if (preview.scrollHeight > preview.clientHeight) {
+        windowEl.classList.add("sn-glow-active");
+      } else {
+        windowEl.classList.remove("sn-glow-active");
+      }
     }
 
     function saveCurrentNote() {
@@ -509,6 +525,13 @@
     preview.style.display = "";
     tabPreview.classList.add("sn-active");
     tabEdit.classList.remove("sn-active");
+
+    const windowEl = overlay.querySelector(".sn-window");
+    if (preview.scrollHeight > preview.clientHeight) {
+      windowEl.classList.add("sn-glow-active");
+    } else {
+      windowEl.classList.remove("sn-glow-active");
+    }
 
     // Show footer so user can switch to edit if desired
     footer.style.display = "";
