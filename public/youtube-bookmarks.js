@@ -380,6 +380,22 @@
         hideNoteOverlay();
         return;
       }
+      
+      // Mac Ctrl + Down/Up arrow keys for page scrolling
+      if ((e.ctrlKey || e.metaKey) && e.key === "ArrowDown") {
+        e.preventDefault();
+        e.stopPropagation();
+        const activeScrollEl = textarea.style.display !== "none" ? textarea : preview;
+        activeScrollEl.scrollBy({ top: activeScrollEl.clientHeight * 0.9, behavior: 'smooth' });
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "ArrowUp") {
+        e.preventDefault();
+        e.stopPropagation();
+        const activeScrollEl = textarea.style.display !== "none" ? textarea : preview;
+        activeScrollEl.scrollBy({ top: -activeScrollEl.clientHeight * 0.9, behavior: 'smooth' });
+        return;
+      }
     });
 
     // Dragging
@@ -404,6 +420,21 @@
       isDragging = false;
     });
 
+    function updateGlowState() {
+      const windowEl = overlay.querySelector(".sn-window");
+      if (preview.style.display !== "none" && preview.scrollHeight > preview.clientHeight) {
+        if (Math.ceil(preview.scrollTop + preview.clientHeight) < preview.scrollHeight - 1) {
+          windowEl.classList.add("sn-glow-active");
+        } else {
+          windowEl.classList.remove("sn-glow-active");
+        }
+      } else {
+        windowEl.classList.remove("sn-glow-active");
+      }
+    }
+
+    preview.addEventListener("scroll", updateGlowState);
+
     // Helper functions
     function switchToEdit() {
       textarea.style.display = "";
@@ -411,7 +442,7 @@
       tabEdit.classList.add("sn-active");
       tabPreview.classList.remove("sn-active");
       footer.style.display = "";
-      overlay.querySelector(".sn-window").classList.remove("sn-glow-active");
+      updateGlowState();
       textarea.focus();
     }
 
@@ -434,12 +465,7 @@
       tabPreview.classList.add("sn-active");
       tabEdit.classList.remove("sn-active");
 
-      const windowEl = overlay.querySelector(".sn-window");
-      if (preview.scrollHeight > preview.clientHeight) {
-        windowEl.classList.add("sn-glow-active");
-      } else {
-        windowEl.classList.remove("sn-glow-active");
-      }
+      updateGlowState();
     }
 
     function saveCurrentNote() {
@@ -526,12 +552,7 @@
     tabPreview.classList.add("sn-active");
     tabEdit.classList.remove("sn-active");
 
-    const windowEl = overlay.querySelector(".sn-window");
-    if (preview.scrollHeight > preview.clientHeight) {
-      windowEl.classList.add("sn-glow-active");
-    } else {
-      windowEl.classList.remove("sn-glow-active");
-    }
+    preview.dispatchEvent(new Event("scroll"));
 
     // Show footer so user can switch to edit if desired
     footer.style.display = "";
