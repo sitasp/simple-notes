@@ -36,7 +36,8 @@ export default function Bookmarks() {
   const [isYoutube, setIsYoutube] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isMac, setIsMac] = useState(false);
-  const [importStatus, setImportStatus] = useState(null); // null | "success" | "error"
+  const [importStatus, setImportStatus] = useState(null);
+  const [expandedNote, setExpandedNote] = useState(null); // index of expanded note
 
   useEffect(() => {
     if (typeof navigator !== "undefined") {
@@ -55,7 +56,6 @@ export default function Bookmarks() {
 
   function loadCurrentTab() {
     try {
-      // Check if chrome API is available (won't be in localhost dev)
       if (typeof chrome === "undefined" || !chrome.tabs) {
         setLoading(false);
         setIsYoutube(false);
@@ -79,7 +79,6 @@ export default function Bookmarks() {
               setVideoId(vid);
               setVideoTitle(tab.title?.replace(" - YouTube", "") || "YouTube Video");
 
-              // Load bookmarks using callback pattern
               chrome.storage.local.get(STORAGE_KEY, (data) => {
                 if (!chrome.runtime.lastError) {
                   const allBookmarks = data[STORAGE_KEY] || {};
@@ -98,7 +97,6 @@ export default function Bookmarks() {
           console.error("Failed to parse URL:", e);
         }
 
-        // If not youtube, or no vid found
         setLoading(false);
       });
     } catch (e) {
@@ -115,7 +113,6 @@ export default function Bookmarks() {
       if (allBookmarks[videoId]) {
         allBookmarks[videoId].bookmarks.splice(index, 1);
 
-        // Remove video entry if no bookmarks left
         if (allBookmarks[videoId].bookmarks.length === 0) {
           delete allBookmarks[videoId];
         }
@@ -155,7 +152,7 @@ export default function Bookmarks() {
     }
   }
 
-  // ── Export: download all bookmarks as JSON ──
+  // ── Export ──
   function handleExport() {
     chrome.storage.local.get(STORAGE_KEY, (data) => {
       if (chrome.runtime.lastError) return;
@@ -170,7 +167,7 @@ export default function Bookmarks() {
     });
   }
 
-  // ── Import: merge JSON file into storage ──
+  // ── Import ──
   function handleImport(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -182,13 +179,11 @@ export default function Bookmarks() {
 
         chrome.storage.local.get(STORAGE_KEY, (data) => {
           const existing = data[STORAGE_KEY] || {};
-          // Same video IDs → overwrite; new IDs → add as-is
           const merged = { ...existing, ...imported };
 
           chrome.storage.local.set({ [STORAGE_KEY]: merged }, () => {
             if (!chrome.runtime.lastError) {
               setImportStatus("success");
-              // Refresh current video's bookmarks if they were in the import
               if (videoId && merged[videoId]) {
                 setBookmarks(merged[videoId].bookmarks || []);
                 if (merged[videoId].title) setVideoTitle(merged[videoId].title);
@@ -204,9 +199,12 @@ export default function Bookmarks() {
       }
     };
     reader.readAsText(file);
-
-    // Reset file input so the same file can be re-imported if needed
     event.target.value = "";
+  }
+
+  // ── Toggle inline note preview in popup ──
+  function toggleNote(index) {
+    setExpandedNote(expandedNote === index ? null : index);
   }
 
   // ── Shared Export / Import button row ──
@@ -264,9 +262,9 @@ export default function Bookmarks() {
         <div className={styles.emptyIcon}>🔖</div>
         <h3 className={styles.emptyTitle}>No bookmarks yet</h3>
         <p className={styles.emptyText}>
-          Press <span className={styles.shortcutKey}>{isMac ? "Ctrl+S" : "Alt+S"}</span> while watching
+          Press <span className={styles.shortcutKey}>{isMac ? "Ctrl+S" : "Alt+S"}</span> to save a timestamp
           <br />
-          to save a timestamp
+          Press <span className={styles.shortcutKey}>{isMac ? "Ctrl+K" : "Alt+K"}</span> to save with a note
         </p>
         <p className={styles.emptyText} style={{ marginTop: "12px" }}>
           <span className={styles.shortcutKey}>{isMac ? "Ctrl+N" : "Alt+N"}</span> next &nbsp;
@@ -293,28 +291,47 @@ export default function Bookmarks() {
       </div>
 
       {bookmarks.map((bookmark, index) => (
-        <div
-          key={`${bookmark.time}-${bookmark.createdAt}`}
-          className={styles.bookmarkItem}
-          onClick={() => handleSeek(bookmark.time)}
-        >
-          <span className={styles.bookmarkIndex}>{index + 1}</span>
-          <span className={styles.bookmarkTime}>
-            {formatTime(bookmark.time)}
-          </span>
-          <span className={styles.bookmarkDate}>
-            {formatDate(bookmark.createdAt)}
-          </span>
-          <button
-            className={styles.deleteBtn}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDelete(index);
-            }}
-            title="Delete bookmark"
+        <div key={`${bookmark.time}-${bookmark.createdAt}`}>
+          <div
+            className={`${styles.bookmarkItem} ${bookmark.note ? styles.hasNote : ""}`}
+            onClick={() => handleSeek(bookmark.time)}
           >
-            ✕
-          </button>
+            <span className={styles.bookmarkIndex}>{index + 1}</span>
+            <span className={styles.bookmarkTime}>
+              {formatTime(bookmark.time)}
+            </span>
+            {bookmark.note && (
+              <button
+                className={styles.noteIndicator}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleNote(index);
+                }}
+                title="View note"
+              >
+                📝
+              </button>
+            )}
+            <span className={styles.bookmarkDate}>
+              {formatDate(bookmark.createdAt)}
+            </span>
+            <button
+              className={styles.deleteBtn}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(index);
+              }}
+              title="Delete bookmark"
+            >
+              ✕
+            </button>
+          </div>
+          {/* Inline note preview */}
+          {expandedNote === index && bookmark.note && (
+            <div className={styles.notePreview}>
+              <pre className={styles.notePreviewText}>{bookmark.note}</pre>
+            </div>
+          )}
         </div>
       ))}
 

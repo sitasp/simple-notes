@@ -23,6 +23,10 @@
     "prev-timestamp": {
       "suggested_key": { "default": "Alt+P", "mac": "MacCtrl+P" },
       "description": "Jump to previous bookmark"
+    },
+    "save-timestamp-with-note": {
+      "suggested_key": { "default": "Alt+K", "mac": "MacCtrl+K" },
+      "description": "Save timestamp and open note editor"
     }
   },
   "background": {
@@ -37,7 +41,7 @@
   "content_scripts": [
     {
       "matches": ["*://*.youtube.com/*"],
-      "js": ["youtube-bookmarks.js"],
+      "js": ["marked.min.js", "youtube-bookmarks.js"],
       "run_at": "document_idle"
     }
   ],

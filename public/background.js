@@ -88,6 +88,42 @@ async function updateBadgeForTab(tabId) {
   }
 }
 
+// ─── Helper: save or reuse a bookmark at current time ───────────────────────
+async function saveOrReuseBookmark(videoId, tab, currentTime) {
+  const data = await chrome.storage.local.get(STORAGE_KEY);
+  const allBookmarks = data[STORAGE_KEY] || {};
+
+  if (!allBookmarks[videoId]) {
+    allBookmarks[videoId] = {
+      title: tab.title?.replace(" - YouTube", "") || "Unknown Video",
+      bookmarks: [],
+    };
+  }
+
+  // Check if bookmark already exists within 1 second
+  const existingIndex = allBookmarks[videoId].bookmarks.findIndex(
+    (b) => Math.abs(b.time - currentTime) < 1
+  );
+
+  let bookmark;
+  let isNew = false;
+
+  if (existingIndex >= 0) {
+    bookmark = allBookmarks[videoId].bookmarks[existingIndex];
+  } else {
+    bookmark = {
+      time: currentTime,
+      createdAt: Date.now(),
+    };
+    allBookmarks[videoId].bookmarks.push(bookmark);
+    allBookmarks[videoId].bookmarks.sort((a, b) => a.time - b.time);
+    isNew = true;
+  }
+
+  await chrome.storage.local.set({ [STORAGE_KEY]: allBookmarks });
+  return { bookmark, isNew };
+}
+
 // ─── Keyboard shortcut handlers ─────────────────────────────────────────────
 chrome.commands.onCommand.addListener(async (command) => {
   console.log(`[Simple Notes] Command received: ${command}`);
@@ -112,32 +148,7 @@ chrome.commands.onCommand.addListener(async (command) => {
       console.log(`[Simple Notes] Response from content script:`, response);
 
       if (response?.time !== undefined) {
-        const data = await chrome.storage.local.get(STORAGE_KEY);
-        const allBookmarks = data[STORAGE_KEY] || {};
-
-        if (!allBookmarks[videoId]) {
-          allBookmarks[videoId] = {
-            title: tab.title?.replace(" - YouTube", "") || "Unknown Video",
-            bookmarks: [],
-          };
-        }
-
-        // Avoid duplicate bookmarks within 1 second of each other
-        const exists = allBookmarks[videoId].bookmarks.some(
-          (b) => Math.abs(b.time - response.time) < 1
-        );
-
-        if (!exists) {
-          allBookmarks[videoId].bookmarks.push({
-            time: response.time,
-            createdAt: Date.now(),
-          });
-
-          // Sort bookmarks by time
-          allBookmarks[videoId].bookmarks.sort((a, b) => a.time - b.time);
-
-          await chrome.storage.local.set({ [STORAGE_KEY]: allBookmarks });
-        }
+        await saveOrReuseBookmark(videoId, tab, response.time);
 
         // Play swoosh sound via content script
         await chrome.tabs.sendMessage(tab.id, { action: "playSwoosh" });
@@ -147,6 +158,32 @@ chrome.commands.onCommand.addListener(async (command) => {
       }
     } catch (e) {
       console.error("Failed to save timestamp:", e);
+    }
+  } else if (command === "save-timestamp-with-note") {
+    // Save timestamp + open note editor
+    try {
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        action: "getCurrentTime",
+      });
+
+      if (response?.time !== undefined) {
+        const { bookmark } = await saveOrReuseBookmark(videoId, tab, response.time);
+
+        // Play swoosh sound
+        await chrome.tabs.sendMessage(tab.id, { action: "playSwoosh" });
+
+        // Flash the icon
+        await flashIcon(tab.id);
+
+        // Tell content script to open the note editor
+        await chrome.tabs.sendMessage(tab.id, {
+          action: "showNoteEditor",
+          videoId,
+          bookmark,
+        });
+      }
+    } catch (e) {
+      console.error("Failed to save timestamp with note:", e);
     }
   } else if (command === "next-timestamp" || command === "prev-timestamp") {
     try {
@@ -161,30 +198,79 @@ chrome.commands.onCommand.addListener(async (command) => {
 
         if (bookmarks.length === 0) return;
 
-        let targetTime;
+        let targetBookmark;
         const currentTime = response.time;
 
         if (command === "next-timestamp") {
           // Find the first bookmark after current time (with 1s tolerance)
           const next = bookmarks.find((b) => b.time > currentTime + 1);
-          targetTime = next ? next.time : bookmarks[0].time; // Wrap around
+          targetBookmark = next || bookmarks[0]; // Wrap around
         } else {
           // Find the last bookmark before current time (with 1s tolerance)
           const prevList = bookmarks.filter((b) => b.time < currentTime - 1);
-          targetTime =
+          targetBookmark =
             prevList.length > 0
-              ? prevList[prevList.length - 1].time
-              : bookmarks[bookmarks.length - 1].time; // Wrap around
+              ? prevList[prevList.length - 1]
+              : bookmarks[bookmarks.length - 1]; // Wrap around
         }
 
         await chrome.tabs.sendMessage(tab.id, {
           action: "seekTo",
-          time: targetTime,
+          time: targetBookmark.time,
         });
+
+        // If the target bookmark has a note, show it as a preview
+        if (targetBookmark.note) {
+          await chrome.tabs.sendMessage(tab.id, {
+            action: "showNotePreview",
+            videoId,
+            bookmark: targetBookmark,
+          });
+        } else {
+          // Hide any existing note overlay if navigating to a bookmark without a note
+          await chrome.tabs.sendMessage(tab.id, {
+            action: "hideNote",
+          });
+        }
       }
     } catch (e) {
       console.error("Failed to navigate timestamp:", e);
     }
+  }
+});
+
+// ─── Message listener for saving notes from content script ──────────────────
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "saveNote") {
+    const { videoId, bookmarkTime, noteText } = message;
+
+    chrome.storage.local.get(STORAGE_KEY, (data) => {
+      const allBookmarks = data[STORAGE_KEY] || {};
+      const videoData = allBookmarks[videoId];
+
+      if (videoData) {
+        const bookmark = videoData.bookmarks.find(
+          (b) => Math.abs(b.time - bookmarkTime) < 0.01
+        );
+
+        if (bookmark) {
+          if (noteText && noteText.trim()) {
+            bookmark.note = noteText;
+          } else {
+            delete bookmark.note; // Remove empty notes
+          }
+
+          chrome.storage.local.set({ [STORAGE_KEY]: allBookmarks }, () => {
+            sendResponse({ success: true });
+          });
+          return; // Keep channel open
+        }
+      }
+
+      sendResponse({ error: "Bookmark not found" });
+    });
+
+    return true; // Keep message channel open for async response
   }
 });
 
